@@ -64,7 +64,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = entsoe_coordinator
 
     # Fetch initial data, so we have data when entities subscribe and set up the platform
-    await entsoe_coordinator.async_config_entry_first_refresh()
+    # Don't fail setup if initial refresh fails - allow degraded mode with retries
+    try:
+        await entsoe_coordinator.async_config_entry_first_refresh()
+    except Exception as exc:
+        _LOGGER.warning(
+            "Failed to fetch initial data from ENTSO-e API during setup. "
+            "The integration will retry automatically. Error: %s",
+            exc,
+        )
+        # Continue setup even if initial fetch fails to prevent blocking HA boot
+    
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 

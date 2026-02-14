@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 import logging
-import threading
 from datetime import timedelta
 from functools import cached_property
 
@@ -51,7 +51,7 @@ class EntsoeCoordinator(DataUpdateCoordinator):
         self.vat = VAT
         self.calculator_last_sync = None
         self.filtered_hourprices = []
-        self.lock = threading.Lock()
+        self.lock = asyncio.Lock()
 
         # Check incase the sensor was setup using config flow.
         # This blow up if the template isnt valid.
@@ -204,13 +204,17 @@ class EntsoeCoordinator(DataUpdateCoordinator):
 
     # SENSOR: Get the current price
     def get_current_price(self) -> int:
-        return self.data[self.current_bucket_time]
+        if not self.data:
+            return None
+        bucket = self.current_bucket_time
+        return self.data.get(bucket)
 
     # SENSOR: Get the next hour price
     def get_next_price(self) -> int:
-        return self.data[
-            self.current_bucket_time + timedelta(minutes=self.period_minutes)
-        ]
+        if not self.data:
+            return None
+        next_bucket = self.current_bucket_time + timedelta(minutes=self.period_minutes)
+        return self.data.get(next_bucket)
 
     # SENSOR: Get timestamped prices of today as attribute for Average Sensor
     def get_prices_today(self):
@@ -248,7 +252,7 @@ class EntsoeCoordinator(DataUpdateCoordinator):
     async def sync_calculator(self):
         now = dt.now()
         bucket = self.current_bucket_time
-        with self.lock:
+        async with self.lock:
             if (
                 self.calculator_last_sync is None
                 or self.calculator_last_sync != bucket
@@ -309,24 +313,39 @@ class EntsoeCoordinator(DataUpdateCoordinator):
 
     # ANALYSIS: Get max price in filtered period
     def get_max_price(self):
-        return max(self._filtered_prices.values())
+        prices = self._filtered_prices
+        if not prices:
+            return None
+        return max(prices.values())
 
     # ANALYSIS: Get min price in filtered period
     def get_min_price(self):
-        return min(self._filtered_prices.values())
+        prices = self._filtered_prices
+        if not prices:
+            return None
+        return min(prices.values())
 
     # ANALYSIS: Get timestamp of max price in filtered period
     def get_max_time(self):
-        return max(self._filtered_prices, key=self._filtered_prices.get)
+        prices = self._filtered_prices
+        if not prices:
+            return None
+        return max(prices, key=prices.get)
 
     # ANALYSIS: Get timestamp of min price in filtered period
     def get_min_time(self):
-        return min(self._filtered_prices, key=self._filtered_prices.get)
+        prices = self._filtered_prices
+        if not prices:
+            return None
+        return min(prices, key=prices.get)
 
     # ANALYSIS: Get avg price in filtered period
     def get_avg_price(self):
+        prices = self._filtered_prices
+        if not prices:
+            return None
         return round(
-            sum(self._filtered_prices.values()) / len(self._filtered_prices.values()),
+            sum(prices.values()) / len(prices.values()),
             5,
         )
 

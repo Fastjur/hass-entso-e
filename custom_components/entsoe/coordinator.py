@@ -206,8 +206,7 @@ class EntsoeCoordinator(DataUpdateCoordinator):
     def get_current_price(self) -> int:
         if not self.data:
             return None
-        bucket = self.current_bucket_time
-        return self.data.get(bucket)
+        return self.data.get(self.current_bucket_time)
 
     # SENSOR: Get the next hour price
     def get_next_price(self) -> int:
